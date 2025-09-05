@@ -1,0 +1,401 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id          Int       @id @default(autoincrement())
+  name        String    @unique
+  password    String
+  displayName String?
+  tags        String // JSON string
+  contents    Content[]
+  flags       Flag[]
+  videos      Video[]
+  purchases   VideoTransaction[]
+  earnings    CreatorEarnings[]
+  createdAt   DateTime  @default(now())
+  isVerifiedCreator Boolean @default(false)
+  subscriberCount   Int     @default(0)
+  contentCategory   String?
+  
+  // Creator verification fields
+  verificationStatus String @default("pending") // pending, approved, rejected
+  verificationCategory String? // education, technology, arts, etc.
+  verificationDocuments String? // JSON array of document URLs
+  verificationSubmittedAt DateTime?
+  verificationApprovedAt DateTime?
+  verificationRejectedAt DateTime?
+  verificationNotes String?
+  
+  // Chat-related fields
+  createdChatRooms ChatRoom[]
+  messages         Message[]
+  messageReactions MessageReaction[]
+  messageReads     MessageRead[]
+  presence         UserPresence[]
+  sentDirectMessages     DirectMessage[] @relation("SentMessages")
+  receivedDirectMessages DirectMessage[] @relation("ReceivedMessages")
+  
+  // Community-related fields
+  createdCommunities     Community[] @relation("CreatedCommunities")
+  communityMemberships   CommunityMembership[] @relation("CommunityMemberships")
+  communityJoinRequests  CommunityJoinRequest[] @relation("CommunityJoinRequests")
+  communityPosts         CommunityPost[] @relation("CommunityPosts")
+  communityComments      CommunityComment[] @relation("CommunityComments")
+  communityPostLikes     CommunityPostLike[] @relation("CommunityPostLikes")
+  communityCommentLikes  CommunityCommentLike[] @relation("CommunityCommentLikes")
+  communityPostReports   CommunityPostReport[] @relation("CommunityPostReports")
+  communityCommentReports CommunityCommentReport[] @relation("CommunityCommentReports")
+  communityNotifications CommunityNotification[] @relation("CommunityNotifications")
+  notifications          Notification[] @relation("UserNotifications")
+  profilePicture         String?
+}
+
+model Content {
+  id         Int       @id @default(autoincrement())
+  title      String
+  sourceLink String
+  tags       String // JSON string
+  creator    User      @relation(fields: [creatorId], references: [id])
+  creatorId  Int
+  createdAt  DateTime  @default(now())
+  viewCount  Int       @default(0)
+  flags      Flag[]
+}
+
+model Flag {
+  id        Int       @id @default(autoincrement())
+  reason    String
+  content   Content   @relation(fields: [contentId], references: [id])
+  contentId Int
+  user      User      @relation(fields: [userId], references: [id])
+  userId    Int
+  createdAt DateTime  @default(now())
+}
+
+model Video {
+  id          Int       @id @default(autoincrement())
+  title       String
+  description String?
+  filePath    String?
+  thumbnailPath String?
+  duration    Int       // in seconds
+  fileSize    BigInt    // in bytes
+  mimeType    String
+  price       Float // ₹10.00 to ₹50.00
+  category    String    // technology, food science, programming, etc.
+  tags        String // JSON string
+  viewCount   Int       @default(0)
+  creator     User      @relation(fields: [creatorId], references: [id])
+  creatorId   Int
+  transactions VideoTransaction[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  // YouTube-specific fields
+  youtubeUrl      String?
+  youtubeVideoId  String?   @unique
+  channelTitle    String?
+}
+
+model VideoTransaction {
+  id          Int       @id @default(autoincrement())
+  video       Video     @relation(fields: [videoId], references: [id])
+  videoId     Int
+  buyer       User      @relation(fields: [buyerId], references: [id])
+  buyerId     Int
+  amount      Float
+  platformFee Float
+  creatorEarning Float
+  upiTransactionId String @unique
+  status      String    @default("pending") // pending, completed, failed
+  createdAt   DateTime  @default(now())
+}
+
+model CreatorEarnings {
+  id          Int       @id @default(autoincrement())
+  creator     User      @relation(fields: [creatorId], references: [id])
+  creatorId   Int
+  totalEarnings Float @default(0)
+  totalSales    Int     @default(0)
+  lastUpdated   DateTime @updatedAt
+  createdAt     DateTime @default(now())
+
+  @@unique([creatorId])
+}
+
+model ChatRoom {
+  id          Int       @id @default(autoincrement())
+  name        String
+  description String?
+  type        String    // "topic" or "region"
+  category    String    // For topic: "Technology", "Gaming", etc. For region: "North America", "Europe", etc.
+  subcategory String?   // For topic: "AI & Machine Learning", "Web Development", etc. For region: "United States", "Canada", etc.
+  isPrivate   Boolean   @default(false)
+  maxUsers    Int       @default(100)
+  createdBy   User      @relation(fields: [createdById], references: [id])
+  createdById Int
+  messages    Message[]
+  participants UserPresence[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Message {
+  id          Int       @id @default(autoincrement())
+  content     String
+  type        String    @default("text") // "text", "image", "file", "system"
+  sender      User      @relation(fields: [senderId], references: [id])
+  senderId    Int
+  chatRoom    ChatRoom  @relation(fields: [chatRoomId], references: [id], onDelete: Cascade)
+  chatRoomId  Int
+  replyTo     Message?  @relation("MessageReply", fields: [replyToId], references: [id])
+  replyToId   Int?
+  replies     Message[] @relation("MessageReply")
+  reactions   MessageReaction[]
+  readBy      MessageRead[]
+  fileUrl     String?   // URL path to uploaded file
+  fileName    String?   // Original filename
+  fileSize    Int?      // File size in bytes
+  editedAt    DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model MessageReaction {
+  id        Int     @id @default(autoincrement())
+  emoji     String
+  user      User    @relation(fields: [userId], references: [id])
+  userId    Int
+  message   Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  messageId Int
+  createdAt DateTime @default(now())
+
+  @@unique([userId, messageId, emoji])
+}
+
+model MessageRead {
+  id        Int     @id @default(autoincrement())
+  user      User    @relation(fields: [userId], references: [id])
+  userId    Int
+  message   Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  messageId Int
+  readAt    DateTime @default(now())
+
+  @@unique([userId, messageId])
+}
+
+model UserPresence {
+  id          Int       @id @default(autoincrement())
+  user        User      @relation(fields: [userId], references: [id])
+  userId      Int
+  chatRoom    ChatRoom  @relation(fields: [chatRoomId], references: [id], onDelete: Cascade)
+  chatRoomId  Int
+  status      String    @default("online") // "online", "away", "offline"
+  lastSeen    DateTime  @default(now())
+  joinedAt    DateTime  @default(now())
+
+  @@unique([userId, chatRoomId])
+}
+
+model DirectMessage {
+  id          Int       @id @default(autoincrement())
+  content     String
+  type        String    @default("text") // "text", "image", "file"
+  sender      User      @relation("SentMessages", fields: [senderId], references: [id])
+  senderId    Int
+  recipient   User      @relation("ReceivedMessages", fields: [recipientId], references: [id])
+  recipientId Int
+  readAt      DateTime?
+  editedAt    DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+// Community Feature Models
+model Community {
+  id          Int       @id @default(autoincrement())
+  name        String    @unique
+  description String?
+  category    String    // "Technology", "Gaming", "Art", etc.
+  tags        String    // JSON array of tags
+  privacyType String    @default("public") // "public" or "private"
+  bannerUrl   String?   // Custom banner image URL
+  logoUrl     String?   // Custom logo image URL
+  rules       String?   // Community guidelines as JSON
+  memberCount Int       @default(0)
+  postCount   Int       @default(0)
+  isActive    Boolean   @default(true)
+  
+  // Relations
+  creator     User      @relation("CreatedCommunities", fields: [creatorId], references: [id])
+  creatorId   Int
+  memberships CommunityMembership[]
+  posts       CommunityPost[]
+  joinRequests CommunityJoinRequest[]
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model CommunityMembership {
+  id          Int       @id @default(autoincrement())
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  communityId Int
+  user        User      @relation("CommunityMemberships", fields: [userId], references: [id])
+  userId      Int
+  role        String    @default("member") // "admin", "moderator", "member"
+  joinedAt    DateTime  @default(now())
+  
+  @@unique([communityId, userId])
+}
+
+model CommunityJoinRequest {
+  id          Int       @id @default(autoincrement())
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  communityId Int
+  user        User      @relation("CommunityJoinRequests", fields: [userId], references: [id])
+  userId      Int
+  status      String    @default("pending") // "pending", "approved", "rejected"
+  message     String?   // Optional message from user
+  reviewedBy  Int?      // Admin/moderator who reviewed
+  reviewedAt  DateTime?
+  respondedAt DateTime?
+  createdAt   DateTime  @default(now())
+  
+  @@unique([communityId, userId])
+}
+
+model CommunityPost {
+  id          Int       @id @default(autoincrement())
+  title       String?
+  content     String
+  type        String    @default("text") // "text", "image", "video", "poll"
+  mediaUrls   String?   // JSON array of media URLs
+  pollOptions String?   // JSON array for poll options
+  pollVotes   String?   // JSON object for poll vote counts
+  isPinned    Boolean   @default(false)
+  isLocked    Boolean   @default(false)
+  isActive    Boolean   @default(true)
+  likeCount   Int       @default(0)
+  commentCount Int      @default(0)
+  viewCount   Int       @default(0)
+  
+  // Relations
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  communityId Int
+  author      User      @relation("CommunityPosts", fields: [authorId], references: [id])
+  authorId    Int
+  likes       CommunityPostLike[]
+  comments    CommunityComment[]
+  reports     CommunityPostReport[]
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model CommunityComment {
+  id          Int       @id @default(autoincrement())
+  content     String
+  likeCount   Int       @default(0)
+  isActive    Boolean   @default(true)
+  
+  // Relations
+  post        CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  postId      Int
+  author      User      @relation("CommunityComments", fields: [authorId], references: [id])
+  authorId    Int
+  parent      CommunityComment? @relation("CommentReplies", fields: [parentId], references: [id])
+  parentId    Int?
+  replies     CommunityComment[] @relation("CommentReplies")
+  likes       CommunityCommentLike[]
+  reports     CommunityCommentReport[]
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model CommunityPostLike {
+  id     Int           @id @default(autoincrement())
+  post   CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  postId Int
+  user   User          @relation("CommunityPostLikes", fields: [userId], references: [id])
+  userId Int
+  type   String        @default("like") // "like", "poll_vote"
+  metadata String?     // JSON data for additional context (e.g., poll option)
+  createdAt DateTime   @default(now())
+  
+  @@unique([postId, userId])
+}
+
+model CommunityCommentLike {
+  id        Int              @id @default(autoincrement())
+  comment   CommunityComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  commentId Int
+  user      User             @relation("CommunityCommentLikes", fields: [userId], references: [id])
+  userId    Int
+  createdAt DateTime         @default(now())
+  
+  @@unique([commentId, userId])
+}
+
+model CommunityPostReport {
+  id       Int           @id @default(autoincrement())
+  post     CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  postId   Int
+  reporter User          @relation("CommunityPostReports", fields: [reporterId], references: [id])
+  reporterId Int
+  reason   String        // "spam", "harassment", "inappropriate", etc.
+  description String?
+  status   String        @default("pending") // "pending", "reviewed", "resolved"
+  reviewedBy Int?
+  reviewedAt DateTime?
+  createdAt DateTime     @default(now())
+  
+  @@unique([postId, reporterId])
+}
+
+model CommunityCommentReport {
+  id       Int              @id @default(autoincrement())
+  comment  CommunityComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  commentId Int
+  reporter User             @relation("CommunityCommentReports", fields: [reporterId], references: [id])
+  reporterId Int
+  reason   String           // "spam", "harassment", "inappropriate", etc.
+  description String?
+  status   String           @default("pending") // "pending", "reviewed", "resolved"
+  reviewedBy Int?
+  reviewedAt DateTime?
+  createdAt DateTime        @default(now())
+  
+  @@unique([commentId, reporterId])
+}
+
+model CommunityNotification {
+  id          Int       @id @default(autoincrement())
+  user        User      @relation("CommunityNotifications", fields: [userId], references: [id])
+  userId      Int
+  type        String    // "new_post", "new_comment", "membership_approved", etc.
+  title       String
+  message     String
+  data        String?   // JSON data for additional context
+  isRead      Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+}
+
+model Notification {
+  id          Int       @id @default(autoincrement())
+  user        User      @relation("UserNotifications", fields: [userId], references: [id])
+  userId      Int
+  type        String    // "community_join", "membership_approved", etc.
+  title       String
+  message     String
+  data        String?   // JSON data for additional context
+  isRead      Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+}
